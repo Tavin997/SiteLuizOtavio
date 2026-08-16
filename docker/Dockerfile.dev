@@ -1,0 +1,34 @@
+# Dockerfile para desenvolvimento
+# Estágio multi-stage para reduzir tamanho da imagem
+
+FROM node:18-alpine AS base
+
+WORKDIR /app
+
+# Instalar dependências compartilhadas
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+
+# Estágio de dependências
+FROM base AS deps
+
+# Copiar apenas os arquivos necessários para instalar dependências
+COPY backend/package*.json ./backend/
+WORKDIR /app/backend
+RUN npm install
+
+# Estágio de desenvolvimento
+FROM base AS dev
+
+ENV NODE_ENV=development
+
+WORKDIR /app/backend
+
+# Copiar node_modules do estágio de deps
+COPY --from=deps /app/backend/node_modules ./node_modules
+
+# Copiar código do backend
+COPY backend/ .
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

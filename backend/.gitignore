@@ -25,18 +25,21 @@ build/
 logs/
 *.log
 npm-debug.log*
+yarn-error.log*
 
 # Runtime data
 pids/
 *.pid
 *.seed
 
-# Docker
-.docker/
+# Coverage
+coverage/
+.nyc_output/
 
-# Database
-*.sqlite
-*.db
+# Tests
+jest/
+.jest/
 
-# OS
-Thumbs.db
+# Prisma
+.env.test
+prisma/dev.db

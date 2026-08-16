@@ -1,0 +1,48 @@
+# Dockerfile para produção
+# Multi-stage build para otimizar tamanho
+
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Instalar dependências de build
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm ci --only=production
+
+# Copiar código
+COPY . .
+
+# Build da aplicação
+RUN npm run build
+
+# Estágio final
+FROM node:18-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Instalar apenas dependências de runtime
+RUN apk add --no-cache cairo jpeg pango giflib
+
+# Copiar dependências do estágio anterior
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copiar arquivos necessários
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/prisma ./prisma
+
+# Criar usuário não-root
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+USER nodejs
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]

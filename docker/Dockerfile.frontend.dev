@@ -1,0 +1,31 @@
+# Dockerfile para desenvolvimento do frontend
+FROM node:18-alpine AS base
+
+WORKDIR /app
+
+# Instalar dependências compartilhadas
+RUN apk add --no-cache python3 make g++
+
+# Estágio de dependências
+FROM base AS deps
+
+COPY frontend/package*.json ./frontend/
+WORKDIR /app/frontend
+RUN npm install
+
+# Estágio de desenvolvimento
+FROM base AS dev
+
+ENV NODE_ENV=development
+
+WORKDIR /app/frontend
+
+# Copiar node_modules do estágio de deps
+COPY --from=deps /app/frontend/node_modules ./node_modules
+
+# Copiar código do frontend
+COPY frontend/ .
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: game-db-dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+    networks:
+      - game-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend (NestJS + Prisma) - Com Hot Reload
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      target: dev
+    container_name: game-backend-dev
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      # Configurar polling para file watching (necessário em Docker/WSL)
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_POLL=1000
+    ports:
+      - "3000:3000"
+    volumes:
+      # Sincronizar código do backend - permite hot reload
+      - ../backend/src:/app/backend/src
+      - ../backend/prisma:/app/backend/prisma
+      - ../backend/package.json:/app/backend/package.json
+      - ../backend/tsconfig.json:/app/backend/tsconfig.json
+      - ../backend/nest-cli.json:/app/backend/nest-cli.json
+      # Node modules separado para evitar conflitos
+      - backend-node-modules:/app/backend/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - game-network
+    restart: unless-stopped
+
+  # Frontend (React + Vite) - Com Hot Module Replacement (HMR)
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend.dev
+      target: dev
+    container_name: game-frontend-dev
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
+      # Configurar HMR para Vite em Docker
+      - VITE_HMR_HOST=localhost
+      - VITE_HMR_PORT=5173
+      - VITE_HMR_PROTOCOL=ws
+      # Configurar polling para file watching
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_POLL=1000
+    ports:
+      - "5173:5173"
+    volumes:
+      # Sincronizar código do frontend - permite hot reload
+      - ../frontend/src:/app/frontend/src
+      - ../frontend/public:/app/frontend/public
+      - ../frontend/package.json:/app/frontend/package.json
+      - ../frontend/vite.config.ts:/app/frontend/vite.config.ts
+      - ../frontend/tsconfig.json:/app/frontend/tsconfig.json
+      - ../frontend/tailwind.config.js:/app/frontend/tailwind.config.js
+      - ../frontend/postcss.config.js:/app/frontend/postcss.config.js
+      - ../frontend/.eslintrc.cjs:/app/frontend/.eslintrc.cjs
+      # Node modules separado para evitar conflitos
+      - frontend-node-modules:/app/frontend/node_modules
+    networks:
+      - game-network
+    restart: unless-stopped
+
+volumes:
+  postgres-data-dev:
+  backend-node-modules:
+  frontend-node-modules:
+
+networks:
+  game-network:
+    driver: bridge
